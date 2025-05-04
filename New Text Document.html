@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <title>Lønn i sanntid</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f4f4;
+      padding: 50px;
+    }
+    .progress-container {
+      width: 80%;
+      background: #ddd;
+      border-radius: 25px;
+      margin: 20px auto;
+      height: 40px;
+      overflow: hidden;
+    }
+    .progress-bar, .progress-bar-deductions {
+      height: 100%;
+      width: 0%;
+      text-align: right;
+      color: white;
+      line-height: 40px;
+      border-radius: 25px;
+    }
+    .progress-bar {
+      background: #4caf50;
+      padding-right: 10px;
+    }
+    .progress-bar-deductions {
+      background: #f44336;
+      text-align: left;
+      padding-left: 10px;
+      margin-top: 10px;
+    }
+    .info, .controls {
+      margin: 20px;
+    }
+    input, select, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px;
+    }
+    .details {
+      text-align: left;
+      width: 60%;
+      margin: 30px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .details h3 {
+      margin-top: 0;
+    }
+    #startTimeLabel {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Lønn i sanntid</h1>
+
+  <div class="info">
+    <label for="taxInput">Skatteprosent (%):</label>
+    <input type="number" id="taxInput" value="35">
+
+    <label for="shiftLength">Skiftlengde:</label>
+    <select id="shiftLength">
+      <option value="8">8 timer</option>
+      <option value="12" selected>12 timer</option>
+    </select>
+
+    <div>
+      <label for="timeSlider">Klokkeslett: <span id="timeSliderLabel">07:00</span></label><br>
+      <input type="range" id="timeSlider" min="0" max="43200" value="0">
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn">Start</button>
+    <button id="pauseBtn">Pause</button>
+    <p id="timeDisplay">Tid: 00:00:00.000</p>
+  </div>
+
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar">0%</div>
+  </div>
+  <p>Inntekter (opptjent)</p>
+
+  <div class="progress-container">
+    <div class="progress-bar-deductions" id="deductionBar">0%</div>
+  </div>
+  <p>Trekk (skatt, forsikring, osv.)</p>
+
+  <p id="earnings">Du har tjent: 0 kr</p>
+  <p id="taxes">Trekk (skatt og annet): 0 kr</p>
+  <p id="netEarnings">Netto lønn: 0 kr</p>
+
+  <div class="details">
+    <h3>Detaljert oversikt</h3>
+    <p><strong>Inntekter inkludert:</strong></p>
+    <ul>
+      <li>Fastlønn: 257.79 kr/t</li>
+      <li>Offshoretillegg</li>
+      <li>Skifttillegg</li>
+      <li>Kompetansetillegg</li>
+      <li>Reisetillegg</li>
+    </ul>
+    <p><strong>Trekk inkludert:</strong></p>
+    <ul>
+      <li>Skatt (valgfri prosent)</li>
+      <li>Gruppelivsforsikring: 93.75 kr/mnd</li>
+      <li>Behandlingsforsikring: 863.12 kr/mnd</li>
+      <li>Ulykke/Sykdomsforsikring: 256.83 kr/mnd</li>
+      <li>Aksjekjøp: 282.83 kr/mnd</li>
+      <li>Fagforening: 320.92 kr/mnd</li>
+      <li>OU-fond: 727 kr/mnd</li>
+      <li>Velferdsforening: 60 kr/mnd</li>
+      <li>Forskuddstrekk: 14.08 kr/mnd</li>
+      <li>Forsikring: 632 kr/mnd</li>
+    </ul>
+  </div>
+
+  <script>
+    const hourlyRate = 257.79;
+    const perSecondRate = hourlyRate / 3600;
+    const extraDeductionsPerSecond = (93.75 + 863.12 + 256.83 + 282.83 + 320.92 + 727 + 14.08 + 60 + 632) / (162.5 * 3600);
+
+    let elapsedMilliseconds = 0;
+    let interval;
+
+    const taxInput = document.getElementById("taxInput");
+    const shiftSelect = document.getElementById("shiftLength");
+    const timeDisplay = document.getElementById("timeDisplay");
+    const startBtn = document.getElementById("startBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const timeSlider = document.getElementById("timeSlider");
+    const timeSliderLabel = document.getElementById("timeSliderLabel");
+
+    timeSlider.oninput = () => {
+      elapsedMilliseconds = parseInt(timeSlider.value) * 1000;
+      updateProgress();
+    };
+
+    function formatTime(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const milliseconds = ms % 1000;
+      return `${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}.${milliseconds.toString().padStart(3,'0')}`;
+    }
+
+    function updateProgress() {
+      const shiftLength = parseFloat(shiftSelect.value);
+      const totalSeconds = shiftLength * 3600;
+      const secondsWorked = elapsedMilliseconds / 1000;
+
+      const earnings = secondsWorked * perSecondRate;
+      const taxAmount = earnings * (parseFloat(taxInput.value) / 100);
+      const additionalDeductions = secondsWorked * extraDeductionsPerSecond;
+      const totalDeductions = taxAmount + additionalDeductions;
+      const net = earnings - totalDeductions;
+
+      const percentage = Math.min((secondsWorked / totalSeconds) * 100, 100);
+      const deductionPercent = Math.min((totalDeductions / (shiftLength * hourlyRate)) * 100, 100);
+
+      document.getElementById("progressBar").style.width = percentage + "%";
+      document.getElementById("progressBar").innerText = percentage.toFixed(1) + "%";
+
+      document.getElementById("deductionBar").style.width = deductionPercent + "%";
+      document.getElementById("deductionBar").innerText = deductionPercent.toFixed(1) + "%";
+
+      document.getElementById("earnings").innerText = `Du har tjent: ${earnings.toFixed(2)} kr`;
+      document.getElementById("taxes").innerText = `Trekk (skatt og annet): ${totalDeductions.toFixed(2)} kr`;
+      document.getElementById("netEarnings").innerText = `Netto lønn: ${net.toFixed(2)} kr`;
+      timeDisplay.textContent = `Tid: ${formatTime(elapsedMilliseconds)}`;
+      timeSliderLabel.textContent = new Date(1970, 0, 1, 7, 0, secondsWorked).toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    startBtn.onclick = () => {
+      if (!interval) {
+        interval = setInterval(() => {
+          elapsedMilliseconds += 1000;
+          timeSlider.value = Math.min(parseInt(timeSlider.value) + 1, parseInt(shiftSelect.value) * 3600);
+          updateProgress();
+        }, 1000);
+      }
+    };
+
+    pauseBtn.onclick = () => {
+      clearInterval(interval);
+      interval = null;
+    };
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        pauseBtn.click();
+      }
+    });
+
+    shiftSelect.onchange = () => {
+      timeSlider.max = parseInt(shiftSelect.value) * 3600;
+      if (parseInt(timeSlider.value) > timeSlider.max) timeSlider.value = timeSlider.max;
+      updateProgress();
+    };
+
+    updateProgress();
+  </script>
+</body>
+</html>
